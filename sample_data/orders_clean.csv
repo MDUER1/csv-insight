@@ -1,0 +1,7 @@
+order_id,customer_id,order_date,age,amount,status,ticket_code
+1,1001,2025-01-05,34,120.50,complete,TCK-2001
+2,1002,2025-01-06,29,89.99,complete,TCK-2002
+3,1003,2025-01-07,41,15.00,processing,TCK-2003
+4,1004,2025-01-08,27,200.00,complete,TCK-2004
+5,1005,2025-01-09,31,50.00,pending,TCK-2005
+

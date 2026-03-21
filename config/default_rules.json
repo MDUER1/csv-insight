@@ -1,0 +1,46 @@
+{
+  "sample_row_limit": 5,
+  "high_cardinality_ratio": 0.95,
+  "high_cardinality_min_rows": 10,
+  "required_column_keywords": [
+    "id",
+    "email",
+    "date"
+  ],
+  "email_column_keywords": [
+    "email"
+  ],
+  "date_column_keywords": [
+    "date"
+  ],
+  "key_column_patterns": [
+    "id",
+    "_id"
+  ],
+  "numeric_ranges": {
+    "age": {
+      "min": 0,
+      "max": 120
+    },
+    "amount": {
+      "min": 0
+    },
+    "price": {
+      "min": 0
+    },
+    "quantity": {
+      "min": 0
+    },
+    "count": {
+      "min": 0
+    },
+    "percent": {
+      "min": 0,
+      "max": 100
+    },
+    "rate": {
+      "min": 0,
+      "max": 100
+    }
+  }
+}

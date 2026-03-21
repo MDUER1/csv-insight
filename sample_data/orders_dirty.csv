@@ -1,0 +1,12 @@
+order_id,customer_id,order_date,age,amount,status,ticket_code
+1,1001,2025-01-05,34,120.50,complete,TCK-1001
+2,,2025-02-11,29,89.99,complete,TCK-1002
+2,1003,not_a_date,150,-10.00,refund,TCK-1003
+3,1004,2025-02-12,41,0,processing,TCK-1004
+3,1004,2025-02-12,41,0,processing,TCK-1004
+4,1005,2025-02-31,27,200,complete,TCK-1006
+5,1006,,, -15,pending,TCK-1007
+6,1007,2025-03-01,thirty,500,custom_status_x,TCK-1008
+7,1008,2025-03-02,31,50,custom_status_y,TCK-1009
+8,1009,2025-03-03,33,75,custom_status_z,TCK-1010
+
