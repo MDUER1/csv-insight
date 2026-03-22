@@ -13,7 +13,7 @@ A local-first learning project that ingests CSV files, profiles their contents, 
 
 ## What Version 1 Does
 
-- Upload a CSV file through a local dashboard
+- Upload a folder of CSV files through a local dashboard
 - Store the raw file on disk and dataset metadata in DuckDB
 - Profile each column
 - Run built-in data-quality checks
