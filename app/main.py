@@ -582,7 +582,6 @@ with current_upload_tab:
                 st.warning(selected_analysis.persistence_error)
             elif selected_analysis.run_id is not None:
                 st.caption("Analysis saved to DuckDB and added to the saved run history.")
-
             issues_tab, dataset_tab, columns_tab = st.tabs(
                 ["Quality issues", "Dataset view", "Column profile"]
             )
