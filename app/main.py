@@ -30,48 +30,130 @@ def apply_page_styles() -> None:
     st.markdown(
         """
         <style>
+        :root {
+            --page-bg: #f4f6f2;
+            --page-bg-secondary: #edf2ec;
+            --surface: #ffffff;
+            --surface-soft: #f8fbf8;
+            --border: #d5dfd7;
+            --text-strong: #152321;
+            --text-muted: #5d6c69;
+            --accent: #2f6f5e;
+            --accent-soft: #e6f0eb;
+            --shadow: 0 14px 32px rgba(21, 35, 33, 0.06);
+        }
         .stApp {
-            background:
-                radial-gradient(circle at top left, rgba(14, 165, 233, 0.10), transparent 28%),
-                linear-gradient(180deg, #f8fafc 0%, #eef4f7 100%);
+            background: linear-gradient(
+                180deg,
+                var(--page-bg) 0%,
+                var(--page-bg-secondary) 100%
+            );
+            color: var(--text-strong);
         }
         .block-container {
             max-width: 1100px;
-            padding-top: 2rem;
+            padding-top: 1.5rem;
             padding-bottom: 2rem;
         }
         .hero-card {
             padding: 1.5rem 1.75rem;
-            border: 1px solid rgba(148, 163, 184, 0.25);
-            border-radius: 20px;
-            background: rgba(255, 255, 255, 0.9);
-            box-shadow: 0 20px 45px rgba(15, 23, 42, 0.07);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            background: linear-gradient(135deg, var(--surface) 0%, var(--surface-soft) 100%);
+            box-shadow: var(--shadow);
             margin-bottom: 1.25rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-card::before {
+            content: "";
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 6px;
+            background: linear-gradient(180deg, var(--accent) 0%, #86ab9d 100%);
+        }
+        .hero-eyebrow {
+            margin: 0 0 0.35rem 0;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-size: 0.74rem;
+            font-weight: 700;
+            color: var(--accent);
         }
         .hero-title {
-            font-size: 2rem;
+            font-size: 2.1rem;
             font-weight: 700;
             letter-spacing: -0.03em;
-            color: #0f172a;
+            color: var(--text-strong);
             margin: 0;
         }
         .hero-copy {
-            color: #475569;
+            color: var(--text-muted);
             margin: 0.5rem 0 0 0;
             font-size: 1rem;
+            max-width: 50rem;
+        }
+        .section-heading {
+            margin: 0.5rem 0 1rem 0;
+        }
+        .section-title {
+            margin: 0;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-strong);
+        }
+        .section-copy {
+            margin: 0.3rem 0 0 0;
+            color: var(--text-muted);
+            font-size: 0.95rem;
         }
         [data-testid="stFileUploader"] {
             padding: 1rem;
             border-radius: 18px;
-            background: rgba(255, 255, 255, 0.82);
-            border: 1px solid rgba(148, 163, 184, 0.25);
+            background: var(--surface);
+            border: 1px dashed #9ab4a7;
+            box-shadow: var(--shadow);
         }
         [data-testid="stMetric"] {
-            background: rgba(255, 255, 255, 0.92);
-            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 0.7rem;
+            box-shadow: none;
+        }
+        [data-testid="stMetricLabel"] {
+            color: var(--text-muted);
+        }
+        [data-testid="stMetricValue"] {
+            color: var(--accent);
+        }
+        div[data-testid="stDataFrame"] {
+            border: 1px solid var(--border);
             border-radius: 16px;
-            padding: 0.6rem;
-            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+            overflow: hidden;
+            background: var(--surface);
+        }
+        div[data-baseweb="select"] > div {
+            border-radius: 14px;
+            border-color: var(--border);
+            background: var(--surface);
+        }
+        button[data-baseweb="tab"] {
+            background: var(--accent-soft);
+            border-radius: 999px;
+            border: 1px solid transparent;
+            color: var(--text-muted);
+            padding: 0.45rem 1rem;
+        }
+        button[data-baseweb="tab"][aria-selected="true"] {
+            background: var(--surface);
+            border-color: var(--border);
+            color: var(--accent);
+            box-shadow: 0 6px 18px rgba(21, 35, 33, 0.06);
+        }
+        [data-testid="stAlert"] {
+            border-radius: 16px;
+            border: 1px solid rgba(154, 180, 167, 0.45);
         }
         </style>
         """,
@@ -83,12 +165,25 @@ def render_header() -> None:
     st.markdown(
         """
         <div class="hero-card">
-            <p class="hero-title">CSV Upload</p>
+            <p class="hero-eyebrow">Data Quality Dashboard</p>
+            <p class="hero-title">Simple CSV quality overview</p>
             <p class="hero-copy">
-                Upload a CSV, inspect the profile summary, review detected quality issues,
-                and keep each run in DuckDB so recent uploads and saved profiles are available
-                across sessions.
+                Upload a CSV, review the key quality signals first, and switch to saved runs
+                when you want to compare earlier analyses. The layout keeps the current upload
+                and the historical view visually separate.
             </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_section_heading(title: str, description: str) -> None:
+    st.markdown(
+        f"""
+        <div class="section-heading">
+            <p class="section-title">{title}</p>
+            <p class="section-copy">{description}</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -363,7 +458,6 @@ def render_saved_runs_dashboard(
     analysis_store: DuckDbAnalysisStore,
     default_run_id: str | None = None,
 ) -> None:
-    st.header("Saved analysis history")
     recent_runs = analysis_store.load_recent_runs(limit=HISTORY_LIMIT)
     if not recent_runs:
         st.info("No saved runs are available yet. Upload a CSV file to create the first persisted run.")
@@ -403,52 +497,70 @@ st.set_page_config(page_title="CSV Data Quality Platform", layout="wide")
 apply_page_styles()
 render_header()
 
-uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
+current_upload_tab, saved_history_tab = st.tabs(["Current upload", "Saved history"])
 
-if uploaded_file is None:
-    clear_upload_state()
-    st.info("Upload a CSV file to preview the dataset and run the built-in validation checks.")
-else:
-    try:
-        (
-            file_content,
-            ingestion_result,
-            profile_result,
-            verification_result,
-            validation_result,
-            current_run_id,
-            persistence_error,
-        ) = get_upload_results(uploaded_file, ANALYSIS_STORE)
-    except InvalidCsvFileError as exc:
+with current_upload_tab:
+    render_section_heading(
+        title="Upload and inspect",
+        description="Focus on the latest CSV first, then use the detail tabs to review issues, raw rows, and column-level metrics.",
+    )
+    uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
+
+    if uploaded_file is None:
         clear_upload_state()
-        st.error(f"Validation error: {exc}")
+        st.info("Upload a CSV file to preview the dataset and run the built-in validation checks.")
     else:
-        render_summary(
-            profile_result=profile_result,
-            validation_result=validation_result,
-            file_name=uploaded_file.name,
-            file_content=file_content,
-            run_id=current_run_id,
-        )
-        render_validation_summary_message(validation_result.summary)
-        if verification_result.is_valid:
-            st.success(
-                f"{verification_result.message} Raw copy stored at `{ingestion_result.stored_path}`."
-            )
+        try:
+            (
+                file_content,
+                ingestion_result,
+                profile_result,
+                verification_result,
+                validation_result,
+                current_run_id,
+                persistence_error,
+            ) = get_upload_results(uploaded_file, ANALYSIS_STORE)
+        except InvalidCsvFileError as exc:
+            clear_upload_state()
+            st.error(f"Validation error: {exc}")
         else:
-            st.error(verification_result.message)
-        if persistence_error is not None:
-            st.warning(persistence_error)
-        elif current_run_id is not None:
-            st.caption("Analysis saved to DuckDB and added to the saved run history.")
-        render_issue_table(validation_result)
-        render_sample_failing_rows(ingestion_result, validation_result)
-        render_preview(ingestion_result)
-        render_null_counts(profile_result)
-        render_column_profile_table(profile_result, title="Column profile")
+            render_summary(
+                profile_result=profile_result,
+                validation_result=validation_result,
+                file_name=uploaded_file.name,
+                file_content=file_content,
+                run_id=current_run_id,
+            )
+            render_validation_summary_message(validation_result.summary)
+            if verification_result.is_valid:
+                st.success(
+                    f"{verification_result.message} Raw copy stored at `{ingestion_result.stored_path}`."
+                )
+            else:
+                st.error(verification_result.message)
+            if persistence_error is not None:
+                st.warning(persistence_error)
+            elif current_run_id is not None:
+                st.caption("Analysis saved to DuckDB and added to the saved run history.")
 
-st.divider()
-render_saved_runs_dashboard(
-    analysis_store=ANALYSIS_STORE,
-    default_run_id=st.session_state.get("current_run_id"),
-)
+            issues_tab, dataset_tab, columns_tab = st.tabs(
+                ["Quality issues", "Dataset view", "Column profile"]
+            )
+            with issues_tab:
+                render_issue_table(validation_result)
+                render_sample_failing_rows(ingestion_result, validation_result)
+            with dataset_tab:
+                render_preview(ingestion_result)
+                render_null_counts(profile_result)
+            with columns_tab:
+                render_column_profile_table(profile_result, title="Column profile")
+
+with saved_history_tab:
+    render_section_heading(
+        title="Saved analysis history",
+        description="Reopen recent runs, compare trend lines, and inspect the persisted column and issue summaries.",
+    )
+    render_saved_runs_dashboard(
+        analysis_store=ANALYSIS_STORE,
+        default_run_id=st.session_state.get("current_run_id"),
+    )
