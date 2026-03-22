@@ -1,23 +1,23 @@
-import hashlib
 from datetime import datetime, timezone
 
-import duckdb
 import pandas as pd
 import streamlit as st
 
-from src.ingestion import (
-    InvalidCsvFileError,
-    ingest_csv_file,
-    verify_ingestion_result,
+from src.models import (
+    CsvUpload,
+    CsvUploadBatchAnalysis,
+    FailedCsvUploadAnalysis,
+    StoredAnalysisRun,
+    StoredRunDetails,
+    StoredValidationIssue,
+    SuccessfulCsvUploadAnalysis,
 )
-from src.models import StoredAnalysisRun, StoredRunDetails, StoredValidationIssue
-from src.profiling import build_dataset_profile
 from src.rules import (
     build_issue_table,
     build_sample_failing_rows_table,
-    validate_dataset,
 )
 from src.storage import DuckDbAnalysisStore
+from src.workflows import analyze_csv_uploads, build_upload_batch_key
 
 
 PREVIEW_ROW_LIMIT = 10
@@ -166,11 +166,11 @@ def render_header() -> None:
         """
         <div class="hero-card">
             <p class="hero-eyebrow">Data Quality Dashboard</p>
-            <p class="hero-title">Simple CSV quality overview</p>
+            <p class="hero-title">Folder-based CSV quality overview</p>
             <p class="hero-copy">
-                Upload a CSV, review the key quality signals first, and switch to saved runs
-                when you want to compare earlier analyses. The layout keeps the current upload
-                and the historical view visually separate.
+                Upload a folder of CSV files, review the folder-level quality summary first,
+                then inspect each processed dataset and compare it with saved runs in the
+                history view.
             </p>
         </div>
         """,
@@ -190,74 +190,71 @@ def render_section_heading(title: str, description: str) -> None:
     )
 
 
-def build_file_hash(file_content: bytes) -> str:
-    return hashlib.sha256(file_content).hexdigest()
-
-
-def build_upload_key(file_name: str, file_content: bytes) -> str:
-    return f"{file_name}:{build_file_hash(file_content)}"
-
-
 def clear_upload_state() -> None:
     for key in (
         "ingested_upload_key",
-        "ingestion_result",
-        "profile_result",
-        "verification_result",
-        "validation_result",
-        "current_run_id",
-        "persistence_error",
+        "upload_batch_analysis",
+        "selected_uploaded_file_index",
     ):
         st.session_state.pop(key, None)
 
 
 def get_upload_results(
-    uploaded_file,
+    uploaded_files,
     analysis_store: DuckDbAnalysisStore,
-) -> tuple[bytes, object, object, object, object, str | None, str | None]:
-    file_content = uploaded_file.getvalue()
-    upload_key = build_upload_key(uploaded_file.name, file_content)
+) -> CsvUploadBatchAnalysis:
+    uploads = tuple(
+        CsvUpload(
+            file_name=uploaded_file.name,
+            file_content=uploaded_file.getvalue(),
+        )
+        for uploaded_file in uploaded_files
+    )
+    upload_key = build_upload_batch_key(uploads)
 
     if st.session_state.get("ingested_upload_key") != upload_key:
-        ingestion_result = ingest_csv_file(
-            file_name=uploaded_file.name,
-            file_content=file_content,
+        st.session_state["upload_batch_analysis"] = analyze_csv_uploads(
+            uploads=uploads,
+            analysis_store=analysis_store,
         )
-        profile_result = build_dataset_profile(ingestion_result.dataframe)
-        verification_result = verify_ingestion_result(
-            ingestion_result=ingestion_result,
-            file_content=file_content,
-        )
-        validation_result = validate_dataset(ingestion_result.dataframe)
-        current_run_id: str | None = None
-        persistence_error: str | None = None
-
-        try:
-            current_run_id = analysis_store.save_upload_run(
-                ingestion_result=ingestion_result,
-                file_content=file_content,
-                profile_result=profile_result,
-                validation_result=validation_result,
-            )
-        except (duckdb.Error, OSError) as exc:
-            persistence_error = f"DuckDB persistence failed: {exc}"
-
-        st.session_state["ingestion_result"] = ingestion_result
-        st.session_state["profile_result"] = profile_result
-        st.session_state["verification_result"] = verification_result
-        st.session_state["validation_result"] = validation_result
-        st.session_state["current_run_id"] = current_run_id
-        st.session_state["persistence_error"] = persistence_error
         st.session_state["ingested_upload_key"] = upload_key
+        st.session_state["selected_uploaded_file_index"] = 0
 
-    return (
-        file_content,
-        st.session_state["ingestion_result"],
-        st.session_state["profile_result"],
-        st.session_state["verification_result"],
-        st.session_state["validation_result"],
-        st.session_state.get("current_run_id"),
-        st.session_state.get("persistence_error"),
+    return st.session_state["upload_batch_analysis"]
+
+
+def render_batch_summary(batch_analysis: CsvUploadBatchAnalysis) -> None:
+    metrics = st.columns(6)
+    metrics[0].metric("CSV files", batch_analysis.total_file_count)
+    metrics[1].metric("Valid", batch_analysis.successful_file_count)
+    metrics[2].metric("Rejected", batch_analysis.failed_file_count)
+    metrics[3].metric("Rows", batch_analysis.total_row_count)
+    metrics[4].metric("Issues", batch_analysis.total_issue_count)
+    metrics[5].metric("Files with issues", batch_analysis.files_with_issues_count)
+
+    caption = f"Total uploaded size: {batch_analysis.total_size_bytes:,} bytes"
+    if batch_analysis.persisted_run_count:
+        caption = f"{caption} | Saved runs: {batch_analysis.persisted_run_count}"
+    st.caption(caption)
+
+
+def render_rejected_uploads(
+    failed_analyses: tuple[FailedCsvUploadAnalysis, ...],
+) -> None:
+    if not failed_analyses:
+        return
+
+    st.subheader("Rejected files")
+    st.dataframe(
+        [
+            {
+                "file_name": analysis.file_name,
+                "error": analysis.error_message,
+            }
+            for analysis in failed_analyses
+        ],
+        use_container_width=True,
+        hide_index=True,
     )
 
 
@@ -460,7 +457,10 @@ def render_saved_runs_dashboard(
 ) -> None:
     recent_runs = analysis_store.load_recent_runs(limit=HISTORY_LIMIT)
     if not recent_runs:
-        st.info("No saved runs are available yet. Upload a CSV file to create the first persisted run.")
+        st.info(
+            "No saved runs are available yet. Upload a folder of CSV files to create "
+            "the first persisted run."
+        )
         return
 
     render_recent_runs_table(recent_runs)
@@ -493,74 +493,122 @@ def render_saved_runs_dashboard(
     render_saved_run_details(selected_details)
 
 
+def format_uploaded_file_label(
+    upload_analysis: SuccessfulCsvUploadAnalysis,
+) -> str:
+    summary = upload_analysis.validation_result.summary
+    return (
+        f"{upload_analysis.file_name} | "
+        f"{upload_analysis.profile_result.row_count} rows | "
+        f"{summary.issue_count} issues | "
+        f"{summary.quality_level}"
+    )
+
+
+def select_uploaded_file(
+    successful_analyses: tuple[SuccessfulCsvUploadAnalysis, ...],
+) -> SuccessfulCsvUploadAnalysis:
+    st.subheader("Processed files")
+    option_indices = list(range(len(successful_analyses)))
+    selected_index = st.session_state.get("selected_uploaded_file_index", 0)
+    if selected_index not in option_indices:
+        st.session_state["selected_uploaded_file_index"] = 0
+        selected_index = 0
+
+    selected_index = st.selectbox(
+        "Inspect a processed file",
+        options=option_indices,
+        index=option_indices.index(selected_index),
+        format_func=lambda index: format_uploaded_file_label(successful_analyses[index]),
+        key="selected_uploaded_file_index",
+    )
+    return successful_analyses[selected_index]
+
+
 st.set_page_config(page_title="CSV Data Quality Platform", layout="wide")
 apply_page_styles()
 render_header()
 
+selected_run_id: str | None = None
 current_upload_tab, saved_history_tab = st.tabs(["Current upload", "Saved history"])
 
 with current_upload_tab:
     render_section_heading(
         title="Upload and inspect",
-        description="Focus on the latest CSV first, then use the detail tabs to review issues, raw rows, and column-level metrics.",
+        description=(
+            "Upload a folder of CSV files, review the batch summary, and inspect one "
+            "processed dataset at a time."
+        ),
     )
-    uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
+    uploaded_files = st.file_uploader(
+        "Upload a folder of CSV files",
+        type=["csv"],
+        accept_multiple_files="directory",
+    )
 
-    if uploaded_file is None:
+    if not uploaded_files:
         clear_upload_state()
-        st.info("Upload a CSV file to preview the dataset and run the built-in validation checks.")
+        st.info(
+            "Upload a folder of CSV files to preview datasets and run the built-in "
+            "validation checks."
+        )
     else:
-        try:
-            (
-                file_content,
-                ingestion_result,
-                profile_result,
-                verification_result,
-                validation_result,
-                current_run_id,
-                persistence_error,
-            ) = get_upload_results(uploaded_file, ANALYSIS_STORE)
-        except InvalidCsvFileError as exc:
-            clear_upload_state()
-            st.error(f"Validation error: {exc}")
+        batch_analysis = get_upload_results(uploaded_files, ANALYSIS_STORE)
+        render_batch_summary(batch_analysis)
+        render_rejected_uploads(batch_analysis.failed_analyses)
+
+        if not batch_analysis.successful_analyses:
+            st.error("No valid CSV files were processed from the uploaded folder.")
         else:
+            selected_analysis = select_uploaded_file(batch_analysis.successful_analyses)
+            selected_run_id = selected_analysis.run_id
+            st.divider()
             render_summary(
-                profile_result=profile_result,
-                validation_result=validation_result,
-                file_name=uploaded_file.name,
-                file_content=file_content,
-                run_id=current_run_id,
+                profile_result=selected_analysis.profile_result,
+                validation_result=selected_analysis.validation_result,
+                file_name=selected_analysis.file_name,
+                file_content=selected_analysis.file_content,
+                run_id=selected_analysis.run_id,
             )
-            render_validation_summary_message(validation_result.summary)
-            if verification_result.is_valid:
+            render_validation_summary_message(selected_analysis.validation_result.summary)
+            if selected_analysis.verification_result.is_valid:
                 st.success(
-                    f"{verification_result.message} Raw copy stored at `{ingestion_result.stored_path}`."
+                    f"{selected_analysis.verification_result.message} Raw copy stored at "
+                    f"`{selected_analysis.ingestion_result.stored_path}`."
                 )
             else:
-                st.error(verification_result.message)
-            if persistence_error is not None:
-                st.warning(persistence_error)
-            elif current_run_id is not None:
+                st.error(selected_analysis.verification_result.message)
+            if selected_analysis.persistence_error is not None:
+                st.warning(selected_analysis.persistence_error)
+            elif selected_analysis.run_id is not None:
                 st.caption("Analysis saved to DuckDB and added to the saved run history.")
-
             issues_tab, dataset_tab, columns_tab = st.tabs(
                 ["Quality issues", "Dataset view", "Column profile"]
             )
             with issues_tab:
-                render_issue_table(validation_result)
-                render_sample_failing_rows(ingestion_result, validation_result)
+                render_issue_table(selected_analysis.validation_result)
+                render_sample_failing_rows(
+                    selected_analysis.ingestion_result,
+                    selected_analysis.validation_result,
+                )
             with dataset_tab:
-                render_preview(ingestion_result)
-                render_null_counts(profile_result)
+                render_preview(selected_analysis.ingestion_result)
+                render_null_counts(selected_analysis.profile_result)
             with columns_tab:
-                render_column_profile_table(profile_result, title="Column profile")
+                render_column_profile_table(
+                    selected_analysis.profile_result,
+                    title="Column profile",
+                )
 
 with saved_history_tab:
     render_section_heading(
         title="Saved analysis history",
-        description="Reopen recent runs, compare trend lines, and inspect the persisted column and issue summaries.",
+        description=(
+            "Reopen recent runs, compare issue trends, and inspect the persisted "
+            "column and validation summaries."
+        ),
     )
     render_saved_runs_dashboard(
         analysis_store=ANALYSIS_STORE,
-        default_run_id=st.session_state.get("current_run_id"),
+        default_run_id=selected_run_id,
     )
