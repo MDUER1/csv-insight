@@ -20,6 +20,15 @@ A local-first learning project that ingests CSV files, profiles their contents, 
 - Show issues, sample failing rows, dataset previews, and column profiles
 - Export issue reports as CSV or JSON
 
+## Try the sample data
+
+After starting the dashboard, open **Current upload** and select the [sample_data](sample_data/) folder. Under **Inspect a processed file**, switch between the two files to see how their profiles differ.
+
+| File | Rows | What to look for |
+| --- | ---: | --- |
+| [orders_clean.csv](sample_data/orders_clean.csv) | 5 | Each order has a customer ID and a distinct ticket code. |
+| [orders_dirty.csv](sample_data/orders_dirty.csv) | 10 | The row with ticket code `TCK-1004` appears twice. The row with `TCK-1002` has an empty customer ID. |
+
 ## Project Layout
 
 ```text
